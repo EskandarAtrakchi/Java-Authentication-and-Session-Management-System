@@ -38,7 +38,7 @@ public class AuthSystemFixed {
     private static final int SESSION_TOKEN_BYTES = 32; // 256-bit token
     private static final long SESSION_TTL_MS = 30 * 60 * 1000L; // 30 minutes
 
-    // In-memory stores (thread-safe) as I said above I will not change the structure of the database, I will keep it storage within 
+    // In-memory stores (thread safe) as I said above I will not change the structure of the database, I will keep it storage within 
     private final Map<String, User> users = new ConcurrentHashMap<>();
     // store SHA-256(sessionToken) -> Session
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
@@ -89,7 +89,7 @@ public class AuthSystemFixed {
 
     /**
      * Attempts login. Returns a session token on success, null on failure.
-     * I want to do this method to avoid user enumeration and uses constant-time comparisons.
+     * I want to do this method to avoid user enumeration and uses constant time comparisons.
      */
     public String login(String username, String password) {
         if (username == null || password == null) return null;

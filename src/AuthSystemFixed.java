@@ -24,20 +24,17 @@ public class AuthSystemFixed {
 
     // Secure random generator generates 256bit tokens for session using SecureRandom and stored as SHA-256 hashes, each session includes a 30 minutes expiration and stored in server (means as long as the code is running) is also validated by hash lookup
     private static final SecureRandom SecureRandomGenerator = new SecureRandom();
-
+    // setting the lockout policy.
+    private static final int maxAttempts = 2;
+    private static final long lockoutDurationMS = 15 * 60 * 1000L; // 15 minutes
+     // Session policy
+    private static final int sessionTokenBytes = 32; // 256-bit token
+    private static final long sessionTimeInMinutes = 30 * 60 * 1000L; // 30 minutes
     // PBKDF2 parameters
     private static final String encryptionAlgo = "PBKDF2WithHmacSHA256";
     private static final int saltLength = 16; // this is bytes
     private static final int keyLengthBits = 32 * 8; // this is bits
     private static final int Iterations = 200_000; // reasonable modern cost
-
-    // setting the lockout policy.
-    private static final int maxAttempts = 2;
-    private static final long lockoutDurationMS = 15 * 60 * 1000L; // 15 minutes
-
-    // Session policy
-    private static final int sessionTokenBytes = 32; // 256-bit token
-    private static final long sessionTimeInMinutes = 30 * 60 * 1000L; // 30 minutes
 
     // In-memory stores (thread safe) as I said above I will not change the structure of the database, I will keep it storage within 
 
@@ -205,18 +202,39 @@ public class AuthSystemFixed {
 
     //////////////////////// Helper crypto utilities ////////////////////////
 
+    // Security Enhancements will be Implemented:
+    // - Cryptographically secure random salts
+    // - PBKDF2 password hashing with high iteration count
+    // - Constant-time comparisons to prevent timing leakage
+    // - Session tokens stored only as SHA-256 hashes
+    // - URL-safe Base64 tokens with strong entropy
+
+    /**
+     * Generates a cryptographically secure random salt for password hashing.
+     * Salts prevent rainbow-table attacks by ensuring identical passwords hash differently.
+    */
     private static byte[] generateSalt() {
         byte[] salt = new byte[saltLength];
         SecureRandomGenerator.nextBytes(salt);
         return salt;
     }
 
+    /**
+     * Generates a high-entropy, URL-safe session token.
+     * Uses secure random bytes and Base64 URL encoding without padding
+     * to minimize predictability and avoid unsafe characters.
+    */
     private static String generateSessionToken() {
         byte[] tokenBytes = new byte[sessionTokenBytes];
         SecureRandomGenerator.nextBytes(tokenBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
     }
 
+    /**
+     * Derives a secure password hash using PBKDF2 with hash stretching.
+     * Incorporates salt, iteration count, and output length to resist brute-force attacks.
+     * Clears password chars afterwards to reduce lingering sensitive data in memory.
+    */
     private static byte[] derivePassword(char[] password, byte[] salt, int Iterations, int keyLenBits) {
         try {
             PBEKeySpec spec = new PBEKeySpec(password, salt, Iterations, keyLenBits);
@@ -229,11 +247,19 @@ public class AuthSystemFixed {
         }
     }
 
+    /**
+     * Compares two byte arrays in constant time to prevent timing attacks.
+     * Avoids giving attackers clues based on processing speed differences.
+    */
     private static boolean constantTimeEquals(byte[] a, byte[] b) {
         if (a == null || b == null) return false;
         return MessageDigest.isEqual(a, b);
     }
 
+    /**
+     * Computes a SHA-256 hash of the input and encodes it as URL-safe Base64.
+     * Used to store session tokens securely without keeping the raw secret.
+    */
     private static String sha256Base64(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");

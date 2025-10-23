@@ -56,28 +56,3 @@ public class AuthSystemOriginal {
         return sessionToken != null && sessionToken.startsWith("session_");
     }
 }
-
-public String validateSession(String token) {
-    // Reject null token immediately
-    if (token == null) return null;
-
-    // Hash the token before lookup; server never stores raw tokens
-    String tokenHash = sha256Base64(token);
-
-    // Retrieve the stored session (if any)
-    Session s = sessions.get(tokenHash);
-
-    // Token not found or tampered
-    if (s == null) return null;
-
-    long now = System.currentTimeMillis();
-
-    // Check expiration time to prevent infinite session reuse
-    if (s.expiry < now) {
-        sessions.remove(tokenHash);   // Cleanup expired session
-        return null;
-    }
-
-    // Valid, active session — return associated username
-    return s.username;
-}

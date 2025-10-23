@@ -101,7 +101,7 @@ public class AuthSystemFixed {
     // 1. Added null checks for username/password to prevent malformed user entries.
     // 2. Added salted PBKDF2 password hashing instead of storing plaintext passwords.
     // 3. Added unique per-user salt and iteration count for stronger security.
-    // 4. Switched to putIfAbsent() to prevent race conditions in concurrent environments.
+    // 4. Switched to putIfAbsent() to prevent duplicate accounts
     // 5. Avoids duplicate username creation even under simultaneous registration attempts.
     */
     public boolean register(String username, String password) {
@@ -112,22 +112,23 @@ public class AuthSystemFixed {
         byte[] salt = generateSalt();
         byte[] hash = derivePassword(password.toCharArray(), salt, Iterations, keyLengthBits);
         User user = new User(salt, hash, Iterations);
-        //Added putIfAbsent() to prevent duplicate accounts
+        
         return users.putIfAbsent(username, user) == null;
-
-
     }
 
     /**
      * Attempts login. Returns a session token on success, null on failure.
-     * doing this is to do this method to avoid user enumeration and uses constant time comparisons.
+     * the following enhancements added to the original code::
+     *  Enhanced with timing-attack protection, PBKDF2 hashing, account lockout,
+     * constant-time comparison, and secure session token handling.
      */
     public String login(String username, String password) {
         if (username == null || password == null) return null;
 
         User user = users.get(username);
 
-        // If user not found, perform a fake PBKDF2 to make timing similar, I know this might seem unnecessary but it's important for security and timing, so I had to add it.
+        // Perform fake PBKDF2 and constant-time compare to mitigate timing attacks
+        // when username does not exist (prevents user enumeration)
         if (user == null) {
             // fake salt and hash
             byte[] fakeSalt = new byte[saltLength];
@@ -142,6 +143,7 @@ public class AuthSystemFixed {
 
         // Check lockout
         long now = System.currentTimeMillis();
+        // Check if account is currently locked due to repeated failures
         if (user.lockoutExpiry > now) {
             // still locked
             // Perform a fake verification to keep timing consistent
@@ -150,21 +152,23 @@ public class AuthSystemFixed {
             return null;
         }
 
-        // Verify password using PBKDF2 with user's salt & Iterations
+        // Derive hash using stored salt & iterations (PBKDF2)
         byte[] candidateHash = derivePassword(password.toCharArray(), user.salt, user.Iterations, keyLengthBits);
+
+        // Constant-time comparison to prevent timing side-channels
         boolean match = constantTimeEquals(candidateHash, user.passwordHash);
 
         if (match) {
-            // Reset counters on success
+            // Reset security counters after successful authentication
             user.failedAttempts = 0;
             user.lockoutExpiry = 0L;
-            // create session
+            // Generate strong session token; store only its hash for security
             String token = generateSessionToken();
             String tokenHash = sha256Base64(token);
             sessions.put(tokenHash, new Session(username, now + sessionTimeInMinutes));
             return token; // raw token returned to client — server keeps only its hash
         } else {
-            // increment failed attempts and possibly lock
+            // Increment failed attempts and trigger lockout when two attempts reached
             int attempts = ++user.failedAttempts;
             if (attempts >= maxAttempts) {
                 user.lockoutExpiry = now + lockoutDurationMS;
@@ -178,7 +182,10 @@ public class AuthSystemFixed {
      * Validates a session token. Returns associated username if valid, otherwise null.
      */
     public String validateSession(String token) {
+
+        // Reject null token immediately
         if (token == null) return null;
+        
         String tokenHash = sha256Base64(token);
         Session s = sessions.get(tokenHash);
         if (s == null) return null;
@@ -189,6 +196,7 @@ public class AuthSystemFixed {
         }
         return s.username;
     }
+
 
     //////////////////////// Helper crypto utilities ////////////////////////
 

@@ -18,43 +18,61 @@ import javax.crypto.spec.PBEKeySpec;
  * - Account lockout after configurable failed attempts
  * - Cryptographically secure session tokens stored as hashes
  * 
- * NOTE: I will not use any external databases, for example MySQL, I will keep using the in-memory maps as in the original code for simplicity.
+ * NOTE: I will not use any external databases, for example MySQL, I will keep using the in-memory maps as in the original code for simplicity. I will also be storing hashes on server (for security)
  */
 public class AuthSystemFixed {
 
-    private static final SecureRandom RNG = new SecureRandom();
+    // Secure random generator generates 256bit tokens for session using SecureRandom and stored as SHA-256 hashes, each session includes a 30 minutes expiration and stored in server (means as long as the code is running) is also validated by hash lookup
+    private static final SecureRandom SecureRandomGenerator = new SecureRandom();
 
     // PBKDF2 parameters
-    private static final String KDF_ALGO = "PBKDF2WithHmacSHA256";
-    private static final int SALT_LEN = 16; // this is bytes
-    private static final int DERIVED_KEY_LEN = 32 * 8; // this is bits
-    private static final int ITERATIONS = 200_000; // reasonable modern cost
+    private static final String encryptionAlgo = "PBKDF2WithHmacSHA256";
+    private static final int saltLength = 16; // this is bytes
+    private static final int keyLengthBits = 32 * 8; // this is bits
+    private static final int Iterations = 200_000; // reasonable modern cost
 
     // setting the lockout policy.
-    private static final int MAX_FAILED_ATTEMPTS = 2;
-    private static final long LOCKOUT_DURATION_MS = 15 * 60 * 1000L; // 15 minutes
+    private static final int maxAttempts = 2;
+    private static final long lockoutDurationMS = 15 * 60 * 1000L; // 15 minutes
 
     // Session policy
-    private static final int SESSION_TOKEN_BYTES = 32; // 256-bit token
-    private static final long SESSION_TTL_MS = 30 * 60 * 1000L; // 30 minutes
+    private static final int sessionTokenBytes = 32; // 256-bit token
+    private static final long sessionTimeInMinutes = 30 * 60 * 1000L; // 30 minutes
 
     // In-memory stores (thread safe) as I said above I will not change the structure of the database, I will keep it storage within 
+
+    /*
+     * in the original code it is like this 
+     * private Map<String, User> users = new HashMap<>();
+     * In-memory "database" of users I will change it to make sure shared data stays correct and safe, even if multiple tasks are running together (multi-threaded environments)
+     */
     private final Map<String, User> users = new ConcurrentHashMap<>();
     // store SHA-256(sessionToken) -> Session
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
 
+    /*
+     * static class User {
+        String password; // Stored in plain text
+        int loginAttempts = 0;
+        
+        User(String password) {
+            this.password = password;
+        }
+    }
+        this original structure is vulnerable to several attacks as I explained above, so I will change it to store the salt and the hashed password using PBKDF2 along with the number of iterations used.
+     */
     private static class User {
         final byte[] salt;             // per-user salt
         final byte[] passwordHash;     // result of PBKDF2
-        final int iterations;
+        final int Iterations;
         volatile int failedAttempts = 0; //no violations allowed
         volatile long lockoutExpiry = 0L; // timestamp until which account is locked and no violations allowed 
 
-        //taking the same structure as the original code and adding to it iterations and salt 
-        User(byte[] salt, byte[] passwordHash, int iterations) {
+        //taking the same structure as the original code and adding to it Iterations and salt 
+        User(byte[] salt, byte[] passwordHash, int Iterations) {
             this.salt = salt;
             this.passwordHash = passwordHash;
-            this.iterations = iterations;
+            this.Iterations = Iterations;
         }
     }
 
@@ -71,25 +89,38 @@ public class AuthSystemFixed {
     }
 
     /**
-     * Registers a new user. Returns true on success, false if username exists.
-     */
+     public boolean register(String username, String password) {
+        if (users.containsKey(username)) {
+            return false;
+        }
+        users.put(username, new User(password));
+        return true;
+    }
+    
+    the original code for register method is vulnerable to several issues as I explained above, so I will change it to include the following enhancements:
+    // 1. Added null checks for username/password to prevent malformed user entries.
+    // 2. Added salted PBKDF2 password hashing instead of storing plaintext passwords.
+    // 3. Added unique per-user salt and iteration count for stronger security.
+    // 4. Switched to putIfAbsent() to prevent race conditions in concurrent environments.
+    // 5. Avoids duplicate username creation even under simultaneous registration attempts.
+    */
     public boolean register(String username, String password) {
         if (username == null || password == null) return false;
         // Avoid race by putIfAbsent
         if (users.containsKey(username)) return false;
 
         byte[] salt = generateSalt();
-        byte[] hash = derivePassword(password.toCharArray(), salt, ITERATIONS, DERIVED_KEY_LEN);
-        User user = new User(salt, hash, ITERATIONS);
+        byte[] hash = derivePassword(password.toCharArray(), salt, Iterations, keyLengthBits);
+        User user = new User(salt, hash, Iterations);
+        //Added putIfAbsent() to prevent duplicate accounts
         return users.putIfAbsent(username, user) == null;
-        // putIfAbsent: If the specified key is not already associated with a value (or is mapped to null) associates it with the given value and returns null, else returns the current value.
 
 
     }
 
     /**
      * Attempts login. Returns a session token on success, null on failure.
-     * I want to do this method to avoid user enumeration and uses constant time comparisons.
+     * doing this is to do this method to avoid user enumeration and uses constant time comparisons.
      */
     public String login(String username, String password) {
         if (username == null || password == null) return null;
@@ -99,12 +130,12 @@ public class AuthSystemFixed {
         // If user not found, perform a fake PBKDF2 to make timing similar, I know this might seem unnecessary but it's important for security and timing, so I had to add it.
         if (user == null) {
             // fake salt and hash
-            byte[] fakeSalt = new byte[SALT_LEN];
-            RNG.nextBytes(fakeSalt);
-            byte[] fakeHash = derivePassword(password.toCharArray(), fakeSalt, ITERATIONS, DERIVED_KEY_LEN);
+            byte[] fakeSalt = new byte[saltLength];
+            SecureRandomGenerator.nextBytes(fakeSalt);
+            byte[] fakeHash = derivePassword(password.toCharArray(), fakeSalt, Iterations, keyLengthBits);
             // compare to another random value in constant time
             byte[] randomCompare = new byte[fakeHash.length];
-            RNG.nextBytes(randomCompare);
+            SecureRandomGenerator.nextBytes(randomCompare);
             constantTimeEquals(fakeHash, randomCompare);
             return null; // Generic failure
         }
@@ -114,13 +145,13 @@ public class AuthSystemFixed {
         if (user.lockoutExpiry > now) {
             // still locked
             // Perform a fake verification to keep timing consistent
-            byte[] fakeHash = derivePassword(password.toCharArray(), user.salt, user.iterations, DERIVED_KEY_LEN);
+            byte[] fakeHash = derivePassword(password.toCharArray(), user.salt, user.Iterations, keyLengthBits);
             constantTimeEquals(fakeHash, user.passwordHash);
             return null;
         }
 
-        // Verify password using PBKDF2 with user's salt & iterations
-        byte[] candidateHash = derivePassword(password.toCharArray(), user.salt, user.iterations, DERIVED_KEY_LEN);
+        // Verify password using PBKDF2 with user's salt & Iterations
+        byte[] candidateHash = derivePassword(password.toCharArray(), user.salt, user.Iterations, keyLengthBits);
         boolean match = constantTimeEquals(candidateHash, user.passwordHash);
 
         if (match) {
@@ -130,13 +161,13 @@ public class AuthSystemFixed {
             // create session
             String token = generateSessionToken();
             String tokenHash = sha256Base64(token);
-            sessions.put(tokenHash, new Session(username, now + SESSION_TTL_MS));
+            sessions.put(tokenHash, new Session(username, now + sessionTimeInMinutes));
             return token; // raw token returned to client — server keeps only its hash
         } else {
             // increment failed attempts and possibly lock
             int attempts = ++user.failedAttempts;
-            if (attempts >= MAX_FAILED_ATTEMPTS) {
-                user.lockoutExpiry = now + LOCKOUT_DURATION_MS;
+            if (attempts >= maxAttempts) {
+                user.lockoutExpiry = now + lockoutDurationMS;
                 user.failedAttempts = 0; // reset count after lock
             }
             return null;
@@ -162,21 +193,21 @@ public class AuthSystemFixed {
     //////////////////////// Helper crypto utilities ////////////////////////
 
     private static byte[] generateSalt() {
-        byte[] salt = new byte[SALT_LEN];
-        RNG.nextBytes(salt);
+        byte[] salt = new byte[saltLength];
+        SecureRandomGenerator.nextBytes(salt);
         return salt;
     }
 
     private static String generateSessionToken() {
-        byte[] tokenBytes = new byte[SESSION_TOKEN_BYTES];
-        RNG.nextBytes(tokenBytes);
+        byte[] tokenBytes = new byte[sessionTokenBytes];
+        SecureRandomGenerator.nextBytes(tokenBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
     }
 
-    private static byte[] derivePassword(char[] password, byte[] salt, int iterations, int keyLenBits) {
+    private static byte[] derivePassword(char[] password, byte[] salt, int Iterations, int keyLenBits) {
         try {
-            PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, keyLenBits);
-            SecretKeyFactory skf = SecretKeyFactory.getInstance(KDF_ALGO);
+            PBEKeySpec spec = new PBEKeySpec(password, salt, Iterations, keyLenBits);
+            SecretKeyFactory skf = SecretKeyFactory.getInstance(encryptionAlgo);
             byte[] key = skf.generateSecret(spec).getEncoded();
             spec.clearPassword();
             return key;

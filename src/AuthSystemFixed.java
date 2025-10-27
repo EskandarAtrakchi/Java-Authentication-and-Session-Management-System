@@ -12,7 +12,7 @@ import javax.crypto.spec.PBEKeySpec;
 /**
  * Secure AuthSystem
  * - PBKDF2WithHmacSHA256 password hashing with per-user salt
- * ## PBKDF2WithHmacSHA256: unique per-user salt ensures that identical passwords produce distinct hashes
+ * - PBKDF2WithHmacSHA256: unique per-user salt ensures that identical passwords produce distinct hashes
  * - Constant-time comparisons
  * - Fake hash verification to prevent user enumeration
  * - Account lockout after configurable failed attempts

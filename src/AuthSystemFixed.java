@@ -9,8 +9,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
-//=======================================================================
-
 /**
  * Secure AuthSystem
  * - PBKDF2WithHmacSHA256 password hashing with per-user salt
@@ -25,20 +23,18 @@ import javax.crypto.spec.PBEKeySpec;
 public class AuthSystemFixed {
 
     // Secure random generator generates 256bit tokens for session using SecureRandom and stored as SHA-256 hashes, each session includes a 30 minutes expiration and stored in server (means as long as the code is running) is also validated by hash lookup
-    private static SecureRandom SecureRandomGenerator = new SecureRandom();
+    private static final SecureRandom SecureRandomGenerator = new SecureRandom();
     // setting the lockout policy.
-    private static int maxAttempts = 2;
-    private static long lockoutDurationMS = 6 * 60 * 1000L; // 6 minutes
+    private static final int maxAttempts = 2;
+    private static final long lockoutDurationMS = 15 * 60 * 1000L; // 15 minutes
      // Session policy
-    private static int sessionTokenBytes = 32; // 256-bit token
-    private static long sessionTimeInMinutes = 30 * 60 * 1000L; // 30 minutes
+    private static final int sessionTokenBytes = 32; // 256-bit token
+    private static final long sessionTimeInMinutes = 30 * 60 * 1000L; // 30 minutes
     // PBKDF2 parameters
-    private static String encryptionAlgo = "PBKDF2WithHmacSHA256";
-    private static int saltLength = 16; // this is bytes
-    private static int keyLengthBits = 32 * 8; // this is bits
-    private static int Iterations = 360000; // reasonable modern cost
-
-    //==================================================================================
+    private static final String encryptionAlgo = "PBKDF2WithHmacSHA256";
+    private static final int saltLength = 16; // this is bytes
+    private static final int keyLengthBits = 32 * 8; // this is bits
+    private static final int Iterations = 200_000; // reasonable modern cost
 
     // In-memory stores (thread safe) as I said above I will not change the structure of the database, I will keep it storage within 
 
@@ -47,9 +43,9 @@ public class AuthSystemFixed {
      * private Map<String, User> users = new HashMap<>();
      * In-memory "database" of users I will change it to make sure shared data stays correct and safe, even if multiple tasks are running together (multi-threaded environments)
      */
-    private Map<String, User> users = new ConcurrentHashMap<>();
+    private final Map<String, User> users = new ConcurrentHashMap<>();
     // store SHA-256(sessionToken) -> Session
-    private Map<String, Session> sessions = new ConcurrentHashMap<>();
+    private final Map<String, Session> sessions = new ConcurrentHashMap<>();
 
     /*
      * static class User {
@@ -63,9 +59,9 @@ public class AuthSystemFixed {
         this original structure is vulnerable to several attacks as I explained above, so I will change it to store the salt and the hashed password using PBKDF2 along with the number of iterations used.
      */
     private static class User {
-     byte[] salt;             // per-user salt
-     byte[] passwordHash;     // result of PBKDF2
-     int Iterations;
+        final byte[] salt;             // per-user salt
+        final byte[] passwordHash;     // result of PBKDF2
+        final int Iterations;
         volatile int failedAttempts = 0; //no violations allowed
         volatile long lockoutExpiry = 0L; // timestamp until which account is locked and no violations allowed 
 
@@ -79,8 +75,8 @@ public class AuthSystemFixed {
 
     //adding the session class to store the username and expiry time
     private static class Session {
-     String username;
-     long expiry;
+        final String username;
+        final long expiry;
 
         // constructor to initialize session
         Session(String username, long expiry) {
@@ -88,8 +84,6 @@ public class AuthSystemFixed {
             this.expiry = expiry;
         }
     }
-
-    //===========================================================================
 
     /**
      public boolean register(String username, String password) {
@@ -118,8 +112,6 @@ public class AuthSystemFixed {
         
         return users.putIfAbsent(username, user) == null;
     }
-
-    //===========================================================================
 
     /**
      * Attempts login. Returns a session token on success, null on failure.
@@ -182,8 +174,6 @@ public class AuthSystemFixed {
             return null;
         }
     }
-
-    //===========================================================================
 
     /**
      * Validates a session token. Returns associated username if valid, otherwise null.

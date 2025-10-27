@@ -3,6 +3,7 @@ import java.util.Scanner;
 class App {
 
     public static void main(String[] args) {
+        //create instance of the class to use it 
         AuthSystemFixed asf = new AuthSystemFixed();
         try (Scanner scanner = new Scanner(System.in)) {
             System.out.println("=== Secure Auth System ===");

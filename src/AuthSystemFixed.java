@@ -9,6 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
+//=======================================================================
+
 /**
  * Secure AuthSystem
  * - PBKDF2WithHmacSHA256 password hashing with per-user salt
@@ -26,7 +28,7 @@ public class AuthSystemFixed {
     private static final SecureRandom SecureRandomGenerator = new SecureRandom();
     // setting the lockout policy.
     private static final int maxAttempts = 2;
-    private static final long lockoutDurationMS = 15 * 60 * 1000L; // 15 minutes
+    private static final long lockoutDurationMS = 6 * 60 * 1000L; // 6 minutes
      // Session policy
     private static final int sessionTokenBytes = 32; // 256-bit token
     private static final long sessionTimeInMinutes = 30 * 60 * 1000L; // 30 minutes
@@ -34,7 +36,9 @@ public class AuthSystemFixed {
     private static final String encryptionAlgo = "PBKDF2WithHmacSHA256";
     private static final int saltLength = 16; // this is bytes
     private static final int keyLengthBits = 32 * 8; // this is bits
-    private static final int Iterations = 200_000; // reasonable modern cost
+    private static final int Iterations = 360000; // reasonable modern cost
+
+    //==================================================================================
 
     // In-memory stores (thread safe) as I said above I will not change the structure of the database, I will keep it storage within 
 
@@ -85,6 +89,8 @@ public class AuthSystemFixed {
         }
     }
 
+    //===========================================================================
+
     /**
      public boolean register(String username, String password) {
         if (users.containsKey(username)) {
@@ -112,6 +118,8 @@ public class AuthSystemFixed {
         
         return users.putIfAbsent(username, user) == null;
     }
+
+    //===========================================================================
 
     /**
      * Attempts login. Returns a session token on success, null on failure.
@@ -175,6 +183,8 @@ public class AuthSystemFixed {
         }
     }
 
+    //===========================================================================
+    
     /**
      * Validates a session token. Returns associated username if valid, otherwise null.
      */

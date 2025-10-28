@@ -26,7 +26,7 @@ public class AuthSystemFixed {
     private static final SecureRandom SecureRandomGenerator = new SecureRandom();
     // setting the lockout policy.
     private static final int maxAttempts = 2;
-    private static final long lockoutDurationMS = 15 * 60 * 1000L; // 15 minutes
+    private static final long lockoutDurationMS = 6 * 60 * 1000L; // 6 minutes
      // Session policy
     private static final int sessionTokenBytes = 32; // 256-bit token
     private static final long sessionTimeInMinutes = 30 * 60 * 1000L; // 30 minutes

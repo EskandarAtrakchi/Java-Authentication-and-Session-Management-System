@@ -163,7 +163,7 @@ public class AuthSystemFixed {
             String token = generateSessionToken();
             String tokenHash = sha256Base64(token);
             sessions.put(tokenHash, new Session(username, now + sessionTimeInMinutes));
-            return token; // raw token returned to client — server keeps only its hash
+            return token; // raw token returned to client server keeps only its hash
         } else {
             // Increment failed attempts and trigger lockout when two attempts reached
             int attempts = ++user.failedAttempts;

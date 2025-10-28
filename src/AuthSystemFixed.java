@@ -34,7 +34,7 @@ public class AuthSystemFixed {
     private static final String encryptionAlgo = "PBKDF2WithHmacSHA256";
     private static final int saltLength = 16; // this is bytes
     private static final int keyLengthBits = 32 * 8; // this is bits
-    private static final int Iterations = 200_000; // reasonable modern cost
+    private static final int Iterations = 360000; // reasonable modern cost
 
     // In-memory stores (thread safe) as I said above I will not change the structure of the database, I will keep it storage within 
 

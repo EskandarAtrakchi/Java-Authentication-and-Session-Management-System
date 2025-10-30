@@ -2,6 +2,7 @@ import java.util.Scanner;
 
 class App {
 
+    // all what I am going to do is creating instance and calling the methods from the other class 
     public static void main(String[] args) {
         //create instance of the class to use it 
         AuthSystemFixed asf = new AuthSystemFixed();
